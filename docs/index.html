@@ -1,0 +1,929 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="타바타 인터벌 타이머 — 20초 운동 / 10초 휴식 × 8라운드.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0E1116">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tabata">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+/* Baseline the artifact shell used to provide. */
+:root{color-scheme:dark}
+html,body{margin:0}
+img,video{max-width:100%}
+[hidden]{display:none !important}
+</style>
+<title>Tabata Clock</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600;700&family=Noto+Sans+KR:wght@500;700;900&display=swap">
+<style>
+/* Single committed dark theme: a gym instrument panel. Every color is painted
+   explicitly so the page never borrows the host ground. */
+:root{
+  --ground:#0E1116;
+  --panel:#151A22;
+  --panel-2:#1B222C;
+  --line:#28313E;
+  --line-soft:#1F2731;
+  --ink:#E9EEF6;
+  --ink-2:#93A1B4;
+  --ink-3:#5E6B7C;
+
+  --prepare:#FFB020;  --prepare-bg:#241B08;
+  --work:#FF4536;     --work-bg:#241010;
+  --rest:#2FD8A6;     --rest-bg:#06211C;
+  --setrest:#7C9CFF;  --setrest-bg:#111A2E;
+  --done:#7C9CFF;     --done-bg:#111A2E;
+
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --ui:Archivo,"Noto Sans KR",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+
+  --radius:14px;
+  --state:var(--rest);
+  --state-bg:var(--rest-bg);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--ui);
+  overscroll-behavior:none;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--rest);outline-offset:3px;border-radius:8px}
+
+/* ── Setup ─────────────────────────────────────────────── */
+.setup{
+  max-width:600px;margin:0 auto;
+  padding:calc(24px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
+  display:flex;flex-direction:column;gap:22px;
+}
+.masthead{display:flex;flex-direction:column;gap:7px}
+.wordmark{
+  font-family:var(--mono);font-weight:700;
+  font-size:clamp(2rem,9vw,2.7rem);letter-spacing:.16em;margin:0;line-height:1;
+}
+.wordmark span{color:var(--rest)}
+.protocol{
+  margin:0;font-family:var(--mono);font-size:.74rem;letter-spacing:.05em;
+  color:var(--ink-3);line-height:1.6;max-width:46ch;
+}
+
+/* Preset chips */
+.presets{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.presets::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto;padding:9px 14px;border:1px solid var(--line);border-radius:999px;
+  font-size:.8rem;font-weight:600;color:var(--ink-2);white-space:nowrap;
+  transition:color .15s,border-color .15s,background .15s;
+}
+.chip[aria-pressed="true"]{color:var(--ground);background:var(--rest);border-color:var(--rest)}
+
+/* Session map */
+.mapblock{display:flex;flex-direction:column;gap:11px}
+.maphead{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.eyebrow{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.total{font-family:var(--mono);font-size:1.55rem;font-weight:600;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.map{display:flex;gap:2px;height:26px;border-radius:6px;overflow:hidden;background:var(--line-soft)}
+.seg{min-width:2px;border-radius:2px;transition:opacity .2s}
+.seg.prepare{background:var(--prepare)} .seg.work{background:var(--work)}
+.seg.rest{background:var(--rest)} .seg.setrest{background:var(--setrest)}
+.map.live .seg{opacity:.34}
+.map.live .seg.past{opacity:.12}
+.map.live .seg.now{opacity:1}
+
+/* Stepper rows */
+.fields{display:flex;flex-direction:column;gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);border-radius:var(--radius);overflow:hidden}
+.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:14px;background:var(--panel);padding:13px 14px}
+.rowmeta{display:flex;flex-direction:column;gap:3px;min-width:0}
+.rowname{font-size:.95rem;font-weight:600}
+.rowhint{font-size:.72rem;color:var(--ink-3);line-height:1.4}
+.stepper{display:flex;align-items:center;gap:2px;background:var(--panel-2);border-radius:10px;padding:3px}
+.stepper button{
+  width:40px;height:38px;border-radius:8px;font-size:1.25rem;line-height:1;color:var(--ink-2);
+  display:grid;place-items:center;transition:background .12s,color .12s;
+}
+.stepper button:active{background:var(--line);color:var(--ink)}
+.stepper button:disabled{opacity:.25;cursor:default}
+.val{
+  min-width:66px;text-align:center;font-family:var(--mono);font-weight:600;
+  font-size:1.05rem;font-variant-numeric:tabular-nums;
+}
+.val small{font-size:.7rem;color:var(--ink-3);margin-left:1px;font-weight:500}
+
+/* Notification toggles */
+.ctrls{display:flex;align-items:center;gap:9px}
+.testbtn{
+  padding:8px 12px;border:1px solid var(--line);border-radius:9px;
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;color:var(--ink-2);
+}
+.testbtn:active{background:var(--line);color:var(--ink)}
+.testbtn:disabled{opacity:.28;cursor:default}
+.switch{
+  width:50px;height:30px;border-radius:999px;background:var(--line);
+  position:relative;flex:0 0 auto;transition:background .18s;
+}
+.switch::after{
+  content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;
+  background:var(--ink-3);transition:transform .18s,background .18s;
+}
+.switch[aria-pressed="true"]{background:var(--rest)}
+.switch[aria-pressed="true"]::after{transform:translateX(20px);background:var(--ground)}
+.switch:disabled{opacity:.3;cursor:default}
+.rowhint.warn{color:var(--prepare)}
+
+/* Start */
+.start{
+  width:100%;padding:20px;border-radius:var(--radius);background:var(--work);color:#fff;
+  font-family:var(--mono);font-weight:700;font-size:1.1rem;letter-spacing:.2em;
+  transition:transform .1s,filter .15s;
+}
+.start:active{transform:scale(.985);filter:brightness(1.1)}
+.footnote{
+  font-size:.73rem;color:var(--ink-3);line-height:1.65;margin:0;
+  display:flex;flex-direction:column;gap:5px;
+}
+.footnote b{color:var(--ink-2);font-weight:600}
+
+/* ── Run ───────────────────────────────────────────────── */
+.run{
+  position:fixed;inset:0;display:none;flex-direction:column;
+  background:var(--state-bg);
+  padding:calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  transition:background .35s ease;
+  overflow:hidden;
+}
+body.running{overflow:hidden}
+body.running .run{display:flex}
+body.running .setup{display:none}
+
+.runtop{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.counter{font-family:var(--mono);font-size:.85rem;letter-spacing:.12em;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.counter b{color:var(--state);font-weight:600}
+.iconbtn{
+  width:42px;height:42px;border-radius:11px;border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--ink-2);font-size:1rem;
+}
+.iconbtn:active{background:var(--line)}
+.runtools{display:flex;gap:8px}
+.topleft{display:flex;flex-direction:column;gap:5px;min-width:0}
+.wakebadge{
+  font-family:var(--mono);font-size:.63rem;letter-spacing:.05em;color:var(--ink-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.wakebadge:empty{display:none}
+.wakebadge.ok{color:var(--rest)}
+.wakebadge.warn{color:var(--prepare)}
+.wakebadge.bad{color:var(--work)}
+/* Fallback keep-awake video: must stay in-layout and visible-ish, so no display:none */
+video.keepawake{
+  position:fixed;left:0;bottom:0;width:10px;height:10px;opacity:.02;
+  border:0;pointer-events:none;z-index:0;
+}
+
+.stage{flex:1;display:grid;place-items:center;position:relative;min-height:0}
+.glow{
+  position:absolute;width:min(120vmin,760px);aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle,var(--state) 0%,transparent 62%);
+  opacity:.13;pointer-events:none;transition:opacity .35s;
+}
+.dial{position:relative;display:grid;place-items:center;width:min(78vmin,420px);aspect-ratio:1}
+.dial svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.track{fill:none;stroke:#ffffff;stroke-opacity:.07;stroke-width:5}
+.prog{fill:none;stroke:var(--state);stroke-width:5;stroke-linecap:round;transition:stroke .35s}
+.readout{display:flex;flex-direction:column;align-items:center;gap:2px;z-index:1}
+.phase{
+  font-family:var(--ui);font-weight:900;font-size:clamp(1.1rem,4.6vmin,1.7rem);
+  letter-spacing:.22em;color:var(--state);transition:color .35s;
+}
+.clock{
+  font-family:var(--mono);font-weight:600;font-size:clamp(4.2rem,26vmin,11rem);
+  line-height:.95;letter-spacing:-.03em;font-variant-numeric:tabular-nums;
+  color:var(--ink);
+}
+.upnext{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;color:var(--ink-3);min-height:1.2em}
+
+.runfoot{display:flex;flex-direction:column;gap:12px}
+.runfoot .map{height:8px;background:rgba(255,255,255,.06)}
+.pausebar{
+  display:flex;gap:8px;
+}
+.wide{
+  flex:1;padding:16px;border-radius:12px;border:1px solid var(--line);
+  font-family:var(--mono);font-size:.85rem;letter-spacing:.14em;color:var(--ink-2);
+}
+.wide.primary{background:var(--state);color:var(--state-bg);border-color:var(--state);font-weight:700}
+.wide:active{filter:brightness(1.12)}
+
+body.paused .clock{opacity:.4}
+body.paused .glow{opacity:.04}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important}
+}
+</style>
+</head>
+<body>
+<main class="setup" id="setup">
+  <header class="masthead">
+    <h1 class="wordmark">TABATA<span>.</span></h1>
+    <p class="protocol">20초 전력 / 10초 휴식 × 8라운드 = 4분.<br>다바타 이즈미, 1996 — 최대산소섭취량 170% 강도 기준.</p>
+  </header>
+
+  <div class="presets" id="presets"></div>
+
+  <section class="mapblock">
+    <div class="maphead">
+      <span class="eyebrow">세션 구성</span>
+      <span class="total" id="total">4:00</span>
+    </div>
+    <div class="map" id="mapSetup"></div>
+  </section>
+
+  <section class="fields" id="fields"></section>
+
+  <section class="mapblock">
+    <span class="eyebrow">알림</span>
+    <div class="fields">
+      <div class="row">
+        <div class="rowmeta">
+          <div class="rowname">소리</div>
+          <div class="rowhint" id="soundHint">3·2·1 카운트다운과 구간 전환음</div>
+        </div>
+        <div class="ctrls">
+          <button class="testbtn" id="testSound">테스트</button>
+          <button class="switch" id="swSound" role="switch" aria-pressed="true" aria-label="소리"></button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="rowmeta">
+          <div class="rowname">진동</div>
+          <div class="rowhint" id="vibHint">지원 여부 확인 중</div>
+        </div>
+        <div class="ctrls">
+          <button class="testbtn" id="testVib">테스트</button>
+          <button class="switch" id="swVib" role="switch" aria-pressed="true" aria-label="진동"></button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="rowmeta">
+          <div class="rowname">화면 꺼짐 방지</div>
+          <div class="rowhint" id="wakeHint">실행 중 자동 잠금을 막습니다 · 진단을 눌러 확인하세요</div>
+        </div>
+        <div class="ctrls">
+          <button class="testbtn" id="testWake">진단</button>
+          <button class="switch" id="swWakeVideo" role="switch" aria-pressed="false" aria-label="영상 방식 보강"></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <button class="start" id="startBtn">START</button>
+
+  <p class="footnote">
+    <span><b>소리</b> — START를 눌러야 오디오가 켜집니다(브라우저 정책). 3·2·1 카운트다운과 구간 전환음이 울려요.</span>
+    <span><b>화면 꺼짐 방지</b> — 실행 중 상단에 유지 상태가 표시되고, 완료 시 화면이 꺼졌는지 보고합니다. 아이폰에서 <b>iframe 차단</b>이 뜨면 영상 대체 방식으로도 못 막으니, 자체 호스팅본을 쓰거나 iOS 자동 잠금을 꺼주세요.</span>
+    <span><b>홈 화면에 추가</b> — Safari 공유 버튼 → '홈 화면에 추가'를 하면 앱처럼 전체화면으로 열립니다.</span>
+    <span><b>진동</b> — 안드로이드에선 작동하고, 아이폰 Safari는 웹 진동 자체를 지원하지 않습니다. 위 '테스트'로 본인 기기를 확인하세요.</span>
+  </p>
+</main>
+
+<section class="run" id="run" aria-live="polite">
+  <div class="runtop">
+    <div class="topleft">
+      <span class="counter" id="counter">ROUND <b>1</b>/8</span>
+      <span class="wakebadge" id="wakeBadge"></span>
+    </div>
+    <div class="runtools">
+      <button class="iconbtn" id="muteBtn" title="소리 끄기" aria-label="소리 끄기">🔊</button>
+      <button class="iconbtn" id="skipBtn" title="다음 구간" aria-label="다음 구간">▶︎▶︎</button>
+      <button class="iconbtn" id="stopBtn" title="종료" aria-label="종료">✕</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="glow"></div>
+    <div class="dial">
+      <svg viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="track" cx="100" cy="100" r="94"></circle>
+        <circle class="prog" id="prog" cx="100" cy="100" r="94"></circle>
+      </svg>
+      <div class="readout">
+        <div class="phase" id="phase">준비</div>
+        <div class="clock" id="clock">10</div>
+        <div class="upnext" id="upnext">다음 · 운동 20초</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="runfoot">
+    <div class="map live" id="mapRun"></div>
+    <div class="pausebar">
+      <button class="wide primary" id="pauseBtn">PAUSE</button>
+    </div>
+  </div>
+</section>
+
+<video class="keepawake" id="keepawake" playsinline webkit-playsinline muted loop
+       preload="auto" disableremoteplayback disablepictureinpicture aria-hidden="true"></video>
+
+<script>
+(function(){
+"use strict";
+
+/* Service worker: makes the home-screen app open instantly and work
+   with no signal — a gym basement is a realistic place to need this. */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").then(null, function(){});
+  });
+}
+
+var $ = function(id){ return document.getElementById(id); };
+var KEY = "tabata.cfg.v1";
+
+var FIELDS = [
+  {key:"prepare", name:"준비",      hint:"시작 전 카운트다운",        unit:"초", min:0,  max:60,   step:5},
+  {key:"work",    name:"운동",      hint:"전력으로 — 여기가 핵심",     unit:"초", min:5,  max:600,  step:5},
+  {key:"rest",    name:"휴식",      hint:"라운드 사이",              unit:"초", min:0,  max:300,  step:5},
+  {key:"rounds",  name:"라운드",    hint:"세트당 반복 횟수",          unit:"회", min:1,  max:40,   step:1},
+  {key:"sets",    name:"세트",      hint:"전체 반복 횟수",            unit:"세트", min:1, max:12,   step:1},
+  {key:"setRest", name:"세트 휴식", hint:"세트 사이 긴 휴식",         unit:"초", min:0,  max:600,  step:15}
+];
+
+var PRESETS = [
+  {name:"타바타 정석",  cfg:{prepare:10, work:20, rest:10, rounds:8, sets:1, setRest:60}},
+  {name:"타바타 ×4",    cfg:{prepare:10, work:20, rest:10, rounds:8, sets:4, setRest:60}},
+  {name:"40/20 서킷",   cfg:{prepare:15, work:40, rest:20, rounds:6, sets:3, setRest:60}},
+  {name:"EMOM 10",     cfg:{prepare:10, work:60, rest:0,  rounds:10, sets:1, setRest:0}},
+  {name:"30/30 입문",   cfg:{prepare:15, work:30, rest:30, rounds:8, sets:2, setRest:90}}
+];
+
+var LABEL = {prepare:"준비", work:"운동", rest:"휴식", setrest:"세트 휴식"};
+
+var cfg = loadCfg();
+var HAS_VIBE = (typeof navigator.vibrate === "function");
+
+function loadCfg(){
+  try{
+    var raw = localStorage.getItem(KEY);
+    if(raw){
+      var p = JSON.parse(raw), out = {};
+      FIELDS.forEach(function(f){
+        var v = Number(p[f.key]);
+        out[f.key] = (isFinite(v) ? clamp(v, f.min, f.max) : PRESETS[0].cfg[f.key]);
+      });
+      out.sound = (p.sound !== false);
+      out.vibrate = (p.vibrate !== false);
+      out.forceVideo = (p.forceVideo === true);
+      return out;
+    }
+  }catch(e){}
+  return Object.assign({sound:true, vibrate:true, forceVideo:false}, PRESETS[0].cfg);
+}
+function saveCfg(){ try{ localStorage.setItem(KEY, JSON.stringify(cfg)); }catch(e){} }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+/* ── Timeline ──────────────────────────────────────────── */
+function buildTimeline(c){
+  var t = [];
+  if(c.prepare > 0) t.push({kind:"prepare", dur:c.prepare, round:1, set:1});
+  for(var s=1; s<=c.sets; s++){
+    for(var r=1; r<=c.rounds; r++){
+      t.push({kind:"work", dur:c.work, round:r, set:s});
+      if(r < c.rounds && c.rest > 0) t.push({kind:"rest", dur:c.rest, round:r, set:s});
+    }
+    if(s < c.sets && c.setRest > 0) t.push({kind:"setrest", dur:c.setRest, round:c.rounds, set:s});
+  }
+  return t;
+}
+function totalOf(tl){ return tl.reduce(function(a,p){ return a + p.dur; }, 0); }
+function mmss(sec){
+  sec = Math.max(0, Math.round(sec));
+  var m = Math.floor(sec/60), s = sec % 60;
+  return m + ":" + (s<10 ? "0"+s : s);
+}
+
+/* ── Setup rendering ───────────────────────────────────── */
+function renderFields(){
+  var wrap = $("fields");
+  wrap.innerHTML = "";
+  FIELDS.forEach(function(f){
+    var row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML =
+      '<div class="rowmeta"><div class="rowname">' + f.name + '</div>' +
+      '<div class="rowhint">' + f.hint + '</div></div>' +
+      '<div class="stepper">' +
+        '<button data-k="' + f.key + '" data-d="-1" aria-label="' + f.name + ' 줄이기">−</button>' +
+        '<div class="val" id="v-' + f.key + '"></div>' +
+        '<button data-k="' + f.key + '" data-d="1" aria-label="' + f.name + ' 늘리기">+</button>' +
+      '</div>';
+    wrap.appendChild(row);
+  });
+  wrap.addEventListener("click", function(e){
+    var b = e.target.closest("button[data-k]");
+    if(!b) return;
+    var f = FIELDS.filter(function(x){ return x.key === b.dataset.k; })[0];
+    cfg[f.key] = clamp(cfg[f.key] + f.step * Number(b.dataset.d), f.min, f.max);
+    saveCfg(); syncSetup();
+  });
+}
+
+function syncSetup(){
+  FIELDS.forEach(function(f){
+    var v = $("v-" + f.key);
+    var num = (f.unit === "초" && cfg[f.key] >= 60) ? mmss(cfg[f.key]) : cfg[f.key];
+    v.innerHTML = num + '<small>' + (f.unit === "초" && cfg[f.key] >= 60 ? "" : f.unit) + '</small>';
+    var stepper = v.parentNode.querySelectorAll("button");
+    stepper[0].disabled = cfg[f.key] <= f.min;
+    stepper[1].disabled = cfg[f.key] >= f.max;
+  });
+  var tl = buildTimeline(cfg);
+  $("total").textContent = mmss(totalOf(tl));
+  drawMap($("mapSetup"), tl);
+  $("presets").querySelectorAll(".chip").forEach(function(chip, i){
+    var p = PRESETS[i].cfg;
+    var same = FIELDS.every(function(f){ return p[f.key] === cfg[f.key]; });
+    chip.setAttribute("aria-pressed", same ? "true" : "false");
+  });
+}
+
+function drawMap(host, tl){
+  host.innerHTML = "";
+  var total = totalOf(tl) || 1;
+  tl.forEach(function(p){
+    var d = document.createElement("div");
+    d.className = "seg " + p.kind;
+    d.style.flex = (p.dur / total) + " 1 0";
+    host.appendChild(d);
+  });
+}
+
+function renderPresets(){
+  var host = $("presets");
+  PRESETS.forEach(function(p, i){
+    var b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = p.name;
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", function(){
+      cfg = Object.assign({}, p.cfg,
+        {sound:cfg.sound, vibrate:cfg.vibrate, forceVideo:cfg.forceVideo});
+      saveCfg(); syncSetup();
+    });
+    host.appendChild(b);
+  });
+}
+
+/* ── Audio ─────────────────────────────────────────────── */
+var ac = null;
+function unlockAudio(){
+  try{
+    if(!ac){
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return;
+      ac = new AC();
+    }
+    if(ac.state === "suspended") ac.resume();
+    var b = ac.createBuffer(1, 1, 22050);
+    var src = ac.createBufferSource(); src.buffer = b;
+    src.connect(ac.destination); src.start(0);
+  }catch(e){}
+}
+function tone(freq, dur, gain, delay){
+  if(!cfg.sound || !ac) return;
+  try{
+    var t = ac.currentTime + (delay || 0);
+    var o = ac.createOscillator(), g = ac.createGain();
+    o.type = "square"; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t); o.stop(t + dur + 0.03);
+  }catch(e){}
+}
+var SOUND = {
+  tick:    function(){ tone(920, 0.10, 0.28); },
+  work:    function(){ tone(1240, 0.13, 0.42); tone(1660, 0.20, 0.42, 0.13); },
+  rest:    function(){ tone(680, 0.24, 0.34); },
+  setrest: function(){ tone(560, 0.18, 0.34); tone(420, 0.30, 0.34, 0.19); },
+  done:    function(){ tone(880, 0.16, 0.4); tone(1100, 0.16, 0.4, 0.17); tone(1480, 0.42, 0.4, 0.34); }
+};
+function buzz(pattern){
+  if(!HAS_VIBE || !cfg.vibrate) return;
+  try{ navigator.vibrate(pattern); }catch(e){}
+}
+
+/* ── Keep-awake ────────────────────────────────────────────
+   Layered: Screen Wake Lock first; if the browser blocks it
+   (a cross-origin frame rejects with NotAllowedError), fall back
+   to a 1.5 KB looping muted video, which most mobile browsers
+   treat as "user is watching something" and refuse to sleep on.
+   Every outcome is reported to the UI — no silent failure.       */
+var MP4 = "AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMwbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAC7gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAlp0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAC7gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAIAAAACAAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAu4AAAAAAABAAAAAAHSbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAwABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABfW1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAT1zdGJsAAAAuXN0c2QAAAAAAAAAAQAAAKlhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAIAAgABIAAAASAAAAAAAAAABFUxhdmM2Mi4yOC4xMDEgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAAL2F2Y0MBQsAe/+EAF2dCwB7ZAgRsBEAAAAMAQAAAAwCDxYuSAQAFaMuDyyAAAAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAAAHeAAAAAAAAAAYc3R0cwAAAAAAAAABAAAAAwAAQAAAAAAUc3RzcwAAAAAAAAABAAAAAQAAABxzdHNjAAAAAAAAAAEAAAABAAAAAwAAAAEAAAAgc3RzegAAAAAAAAAAAAAAAwAAArcAAAALAAAACwAAABRzdGNvAAAAAAAAAAEAAANgAAAAYnVkdGEAAABabWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRpcmFwcGwAAAAAAAAAAAAAAAAtaWxzdAAAACWpdG9vAAAAHWRhdGEAAAABAAAAAExhdmY2Mi4xMi4xMDEAAAAIZnJlZQAAAtVtZGF0AAACcAYF//9s3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE2NSByMzIyMiBiMzU2MDVhIC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAyNSAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTAgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MToweDExMSBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MCBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTQgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0wIHdlaWdodHA9MCBrZXlpbnQ9MjUwIGtleWludF9taW49MSBzY2VuZWN1dD00MCBpbnRyYV9yZWZyZXNoPTAgcmNfbG9va2FoZWFkPTQwIHJjPWNyZiBtYnRyZWU9MSBjcmY9MjMuMCBxY29tcD0wLjYwIHFwbWluPTAgcXBtYXg9NjkgcXBzdGVwPTQgaXBfcmF0aW89MS40MCBhcT0xOjEuMDAAgAAAAD9liIQF////D0UAAVefJycnJycnJ111111111111111111111111111111111111111111111111111111114AAAAAHQZo4C3gQYAAAAAdBmlQCvgQY";
+
+var WakeGuard = (function(){
+  var lock = null, timer = null, on = false;
+  var mode = "idle", why = "", listeners = [];
+
+  function hasAPI(){ return !!(navigator.wakeLock && navigator.wakeLock.request); }
+  function vid(){ return $("keepawake"); }
+  function set(m, r){
+    r = r || "";
+    if(m === mode && r === why) return;
+    mode = m; why = r;
+    listeners.forEach(function(f){ try{ f(mode, why); }catch(e){} });
+  }
+  function play(v){
+    try{ v.muted = true; var pr = v.play(); return (pr && pr.then) ? pr : Promise.resolve(); }
+    catch(e){ return Promise.reject(e); }
+  }
+  function startVideo(){
+    var v = vid();
+    if(!v) return Promise.reject(new Error("no element"));
+    if(!v.getAttribute("src")) v.setAttribute("src", "data:video/mp4;base64," + MP4);
+    return play(v);
+  }
+  function stopVideo(){ try{ var v = vid(); if(v && !v.paused) v.pause(); }catch(e){} }
+  function dropLock(){ try{ if(lock && !lock.released) lock.release(); }catch(e){} lock = null; }
+
+  function settle(pending, reason){
+    (pending || Promise.reject()).then(function(){
+      var v = vid();
+      set(v && !v.paused ? "video" : "fail", reason);
+    }, function(){ set("fail", reason); });
+  }
+
+  function acquire(){
+    if(!on || document.visibilityState !== "visible") return;
+    var healthy = !!(lock && !lock.released);
+
+    /* Kick the fallback off SYNCHRONOUSLY. acquire() runs inside the
+       START tap, and iOS is far likelier to honour play() there than
+       in the promise callback of a rejected wake-lock request. If the
+       real lock does come through we shut the video back down below. */
+    var pending = (!healthy || cfg.forceVideo) ? startVideo() : null;
+    if(healthy) return;
+
+    if(!hasAPI()) return settle(pending, "API 없음");
+    try{
+      navigator.wakeLock.request("screen").then(function(w){
+        if(!on){ try{ w.release(); }catch(e){} return; }
+        lock = w;
+        /* iOS can revoke the lock on its own — take it straight back. */
+        w.addEventListener("release", function(){ lock = null; if(on) acquire(); });
+        if(cfg.forceVideo){ set("both", ""); }
+        else { stopVideo(); set("lock", ""); }
+      }, function(err){
+        lock = null;
+        settle(pending, err && err.name ? err.name : "거부됨");
+      });
+    }catch(err){ settle(pending, err && err.name ? err.name : "예외"); }
+  }
+
+  return {
+    enable: function(){
+      on = true; acquire();
+      clearInterval(timer);
+      timer = setInterval(function(){          /* watchdog */
+        if(!on || document.visibilityState !== "visible") return;
+        if(!lock || lock.released) acquire();
+        if(mode === "video" || mode === "both"){
+          var v = vid(); if(v && v.paused) play(v).then(null, function(){});
+        }
+      }, 12000);
+    },
+    disable: function(){
+      on = false; clearInterval(timer); timer = null;
+      dropLock(); stopVideo(); set("idle", "");
+    },
+    retry: function(){ if(on) acquire(); },
+    refresh: function(){ if(on){ stopVideo(); acquire(); } },
+    onChange: function(f){ listeners.push(f); f(mode, why); },
+    /* One-shot diagnostic, safe to call from a button. */
+    probe: function(){
+      return new Promise(function(res){
+        var out = {lock:false, lockWhy:"", video:false,
+                   framed:(window.self !== window.top), policy:null};
+        /* Distinguishes "a permissions policy forbids this frame" from
+           "the browser itself said no" — the two look identical otherwise,
+           both surfacing as a bare NotAllowedError. */
+        try{
+          if(document.featurePolicy && document.featurePolicy.allowsFeature)
+            out.policy = document.featurePolicy.allowsFeature("screen-wake-lock");
+        }catch(e){}
+        function checkVideo(){
+          startVideo().then(function(){
+            var v = vid();
+            out.video = !!(v && !v.paused);
+            setTimeout(function(){ if(!on) stopVideo(); }, 1200);
+            res(out);
+          }, function(){ res(out); });
+        }
+        if(!hasAPI()){ out.lockWhy = "API 없음"; return checkVideo(); }
+        try{
+          navigator.wakeLock.request("screen").then(function(w){
+            out.lock = true;
+            setTimeout(function(){ if(!on){ try{ w.release(); }catch(e){} } }, 1500);
+            checkVideo();
+          }, function(err){
+            out.lockWhy = (err && err.name) ? err.name : "거부됨";
+            checkVideo();
+          });
+        }catch(err){ out.lockWhy = (err && err.name) ? err.name : "예외"; checkVideo(); }
+      });
+    }
+  };
+})();
+
+/* Blackout detector — if the display really does sleep mid-session the
+   document goes hidden, so the next run reports for itself instead of
+   relying on you to watch the screen. (Switching apps looks the same,
+   hence the wording on the report.) */
+var blackout = {count:0, ms:0, since:0};
+function resetBlackout(){ blackout = {count:0, ms:0, since:0}; }
+
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState === "hidden"){
+    if(running && !blackout.since){ blackout.count++; blackout.since = Date.now(); }
+  }else{
+    if(blackout.since){ blackout.ms += Date.now() - blackout.since; blackout.since = 0; }
+    WakeGuard.retry();
+  }
+});
+
+/* ── Engine ────────────────────────────────────────────── */
+var tl = [], idx = 0, phaseStart = 0, running = false, paused = false, pauseAt = 0;
+var lastSecShown = null, segEls = [];
+var C = 2 * Math.PI * 94;
+$("prog").style.strokeDasharray = C;
+
+function setState(kind){
+  var root = document.documentElement.style;
+  root.setProperty("--state", "var(--" + kind + ")");
+  root.setProperty("--state-bg", "var(--" + kind + "-bg)");
+}
+
+function start(){
+  unlockAudio();
+  tl = buildTimeline(cfg);
+  if(!tl.length) return;
+  idx = 0; phaseStart = performance.now();
+  running = true; paused = false; lastSecShown = null;
+  document.body.classList.add("running");
+  document.body.classList.remove("paused");
+  $("pauseBtn").textContent = "PAUSE";
+  drawMap($("mapRun"), tl);
+  segEls = Array.prototype.slice.call($("mapRun").children);
+  enterPhase(true);
+  resetBlackout();
+  WakeGuard.enable();
+  requestAnimationFrame(loop);
+}
+
+function enterPhase(silent){
+  var p = tl[idx];
+  setState(p.kind);
+  $("phase").textContent = LABEL[p.kind];
+  $("counter").innerHTML = p.kind === "prepare"
+    ? "곧 시작"
+    : (cfg.sets > 1 ? "SET <b>" + p.set + "</b>/" + cfg.sets + " · " : "") +
+      "ROUND <b>" + p.round + "</b>/" + cfg.rounds;
+  var nx = tl[idx + 1];
+  $("upnext").textContent = nx ? "다음 · " + LABEL[nx.kind] + " " + mmss(nx.dur).replace(/^0:0?/, "") + (nx.dur < 60 ? "초" : "") : "마지막 구간";
+  segEls.forEach(function(el, i){
+    el.classList.toggle("past", i < idx);
+    el.classList.toggle("now", i === idx);
+  });
+  lastSecShown = null;
+  if(!silent){
+    if(p.kind === "work"){ SOUND.work(); buzz([70,60,70,60,220]); }
+    else if(p.kind === "rest"){ SOUND.rest(); buzz(150); }
+    else if(p.kind === "setrest"){ SOUND.setrest(); buzz([110,80,110]); }
+  }
+}
+
+function loop(){
+  if(!running) return;
+  if(!paused){
+    var p = tl[idx];
+    var remain = p.dur - (performance.now() - phaseStart) / 1000;
+    if(remain <= 0){
+      phaseStart += p.dur * 1000;
+      idx++;
+      if(idx >= tl.length){ finish(); return; }
+      enterPhase(false);
+      requestAnimationFrame(loop);
+      return;
+    }
+    paint(remain, p);
+  }
+  requestAnimationFrame(loop);
+}
+
+function paint(remain, p){
+  var secs = Math.ceil(remain - 0.001);
+  if(secs !== lastSecShown){
+    lastSecShown = secs;
+    $("clock").textContent = secs >= 60 ? mmss(secs) : String(secs);
+    if(secs <= 3 && secs >= 1){ SOUND.tick(); }
+  }
+  $("prog").style.strokeDashoffset = C * (1 - remain / p.dur);
+}
+
+function finish(){
+  SOUND.done(); buzz([120,80,120,80,220]);
+  setState("done");
+  $("phase").textContent = "완료";
+  $("clock").textContent = mmss(totalOf(tl));
+  $("counter").innerHTML = "총 <b>" + cfg.rounds * cfg.sets + "</b>라운드";
+  $("upnext").textContent = blackout.count
+    ? "⚠️ 화면 꺼짐 " + blackout.count + "회 · 총 " + Math.round(blackout.ms/1000) + "초"
+    : "수고했어요 · 화면 유지 성공";
+  $("prog").style.strokeDashoffset = 0;
+  segEls.forEach(function(el){ el.classList.remove("now"); el.classList.add("past"); });
+  $("pauseBtn").textContent = "DONE";
+  $("wakeHint").className = "rowhint" + (blackout.count ? " warn" : "");
+  $("wakeHint").textContent = blackout.count
+    ? "지난 세션에서 화면이 " + blackout.count + "회 꺼짐 — 영상 방식으로도 못 막았습니다"
+    : "지난 세션 내내 화면 유지 성공 ✅";
+  running = false; paused = false;
+  document.body.classList.remove("paused");
+  WakeGuard.disable();
+}
+
+function togglePause(){
+  if(!running) return stop();
+  if(paused){
+    phaseStart += performance.now() - pauseAt;
+    paused = false;
+    document.body.classList.remove("paused");
+    $("pauseBtn").textContent = "PAUSE";
+    WakeGuard.retry();
+  }else{
+    paused = true; pauseAt = performance.now();
+    document.body.classList.add("paused");
+    $("pauseBtn").textContent = "RESUME";
+  }
+}
+
+function skip(){
+  if(!running) return;
+  idx++;
+  if(idx >= tl.length){ finish(); return; }
+  phaseStart = performance.now();
+  if(paused){ pauseAt = phaseStart; }
+  enterPhase(false);
+}
+
+function stop(){
+  running = false; paused = false;
+  document.body.classList.remove("running", "paused");
+  WakeGuard.disable();
+  syncSetup();
+}
+
+/* ── Wiring ────────────────────────────────────────────── */
+renderPresets();
+renderFields();
+syncSetup();
+
+$("startBtn").addEventListener("click", start);
+$("pauseBtn").addEventListener("click", togglePause);
+$("skipBtn").addEventListener("click", skip);
+$("stopBtn").addEventListener("click", stop);
+$("muteBtn").addEventListener("click", function(){
+  cfg.sound = !cfg.sound; saveCfg();
+  if(cfg.sound) unlockAudio();
+  syncToggles();
+});
+
+var WAKE_TEXT = {
+  lock:  ["ok",   "🔒 화면 유지 중"],
+  both:  ["ok",   "🔒 화면 유지 중 · 영상 보강"],
+  video: ["warn", "▶︎ 영상 방식으로 유지"],
+  fail:  ["bad",  "⚠️ 화면 유지 실패"],
+  idle:  ["",     ""]
+};
+WakeGuard.onChange(function(mode, why){
+  var t = WAKE_TEXT[mode] || WAKE_TEXT.idle;
+  var badge = $("wakeBadge");
+  badge.className = "wakebadge " + t[0];
+  badge.textContent = t[1] + (why && mode !== "idle" ? " · " + why : "");
+  if(mode === "fail"){
+    $("wakeHint").className = "rowhint warn";
+    $("wakeHint").textContent = "유지 실패 · iOS 설정 → 디스플레이 및 밝기 → 자동 잠금 → 안 함";
+  }else if(mode === "video"){
+    $("wakeHint").className = "rowhint";
+    $("wakeHint").textContent = "Wake Lock 차단(" + why + ") · 영상 방식으로 대체 중";
+  }
+});
+
+/* Re-arm on any touch during a run: a real user gesture has the
+   best odds of being granted. Throttled so it costs nothing. */
+(function(){
+  var last = 0;
+  $("run").addEventListener("pointerdown", function(){
+    var t = Date.now();
+    if(t - last < 3000) return;
+    last = t; WakeGuard.retry();
+  }, {passive:true});
+})();
+
+function syncToggles(){
+  $("swSound").setAttribute("aria-pressed", cfg.sound ? "true" : "false");
+  $("muteBtn").textContent = cfg.sound ? "🔊" : "🔇";
+  $("muteBtn").setAttribute("aria-label", cfg.sound ? "소리 끄기" : "소리 켜기");
+
+  $("swVib").setAttribute("aria-pressed", (HAS_VIBE && cfg.vibrate) ? "true" : "false");
+  $("swVib").disabled = !HAS_VIBE;
+  $("testVib").disabled = !HAS_VIBE;
+  $("vibHint").className = "rowhint" + (HAS_VIBE ? "" : " warn");
+  $("swWakeVideo").setAttribute("aria-pressed", cfg.forceVideo ? "true" : "false");
+
+  $("vibHint").textContent = HAS_VIBE
+    ? "운동 시작 = 짧게 두 번 + 길게 한 번"
+    : "이 브라우저는 웹 진동을 지원하지 않아요 (iOS Safari 해당)";
+}
+
+$("swSound").addEventListener("click", function(){
+  cfg.sound = !cfg.sound; saveCfg();
+  if(cfg.sound){ unlockAudio(); SOUND.tick(); }
+  syncToggles();
+});
+$("swVib").addEventListener("click", function(){
+  cfg.vibrate = !cfg.vibrate; saveCfg();
+  if(cfg.vibrate) buzz(60);
+  syncToggles();
+});
+$("swWakeVideo").addEventListener("click", function(){
+  cfg.forceVideo = !cfg.forceVideo; saveCfg();
+  WakeGuard.refresh();
+  $("wakeHint").className = "rowhint";
+  $("wakeHint").textContent = cfg.forceVideo
+    ? "Wake Lock이 되더라도 영상 방식을 함께 돌립니다"
+    : "자동 — Wake Lock 우선, 막히면 영상 방식";
+  syncToggles();
+});
+
+$("testWake").addEventListener("click", function(){
+  var hint = $("wakeHint");
+  hint.className = "rowhint";
+  hint.textContent = "진단 중…";
+  WakeGuard.probe().then(function(r){
+    var tail = " [" + (r.lockWhy || "ok")
+             + " · frame:" + (r.framed ? "yes" : "no")
+             + " · policy:" + (r.policy === null ? "?" : (r.policy ? "allow" : "block"))
+             + " · video:" + (r.video ? "ok" : "no") + "]";
+    if(r.lock){
+      hint.className = "rowhint";
+      hint.textContent = "✅ Wake Lock 정상 — 이대로 쓰시면 됩니다" + tail;
+    }else if(r.framed){
+      hint.className = "rowhint warn";
+      hint.textContent = "❌ iframe이 차단 중 — 자체 호스팅해야 풀립니다" + tail;
+    }else{
+      hint.className = "rowhint warn";
+      hint.textContent = "❌ 브라우저가 거부 — iOS 설정 → 자동 잠금 → 안 함" + tail;
+    }
+  });
+});
+
+$("testSound").addEventListener("click", function(){
+  unlockAudio();
+  var was = cfg.sound; cfg.sound = true;
+  SOUND.tick(); tone(920, 0.10, 0.28, 0.35); SOUND.work();
+  setTimeout(function(){ cfg.sound = was; }, 1200);
+  $("soundHint").textContent = "3 · 2 · 1 → 운동 시작음";
+});
+$("testVib").addEventListener("click", function(){
+  if(!HAS_VIBE) return;
+  var was = cfg.vibrate; cfg.vibrate = true;
+  buzz([70,60,70,60,220]);
+  cfg.vibrate = was;
+  $("vibHint").textContent = "안 느껴지면 이 기기는 미지원 — 소리로 쓰세요";
+});
+syncToggles();
+
+document.addEventListener("keydown", function(e){
+  if(e.code === "Space"){ e.preventDefault(); running ? togglePause() : start(); }
+  else if(e.code === "Escape" && running){ stop(); }
+  else if(e.code === "ArrowRight" && running){ skip(); }
+});
+})();
+</script>
+</body>
+</html>
