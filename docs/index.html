@@ -285,7 +285,7 @@ body.paused .glow{opacity:.04}
         </div>
         <div class="ctrls">
           <button class="testbtn" id="testWake">진단</button>
-          <button class="switch" id="swWakeVideo" role="switch" aria-pressed="false" aria-label="영상 방식 보강"></button>
+          <button class="switch" id="swKeepAwake" role="switch" aria-pressed="true" aria-label="화면 꺼짐 방지"></button>
         </div>
       </div>
     </div>
@@ -388,11 +388,11 @@ function loadCfg(){
       });
       out.sound = (p.sound !== false);
       out.vibrate = (p.vibrate !== false);
-      out.forceVideo = (p.forceVideo === true);
+      out.keepAwake = (p.keepAwake !== false);
       return out;
     }
   }catch(e){}
-  return Object.assign({sound:true, vibrate:true, forceVideo:false}, PRESETS[0].cfg);
+  return Object.assign({sound:true, vibrate:true, keepAwake:true}, PRESETS[0].cfg);
 }
 function saveCfg(){ try{ localStorage.setItem(KEY, JSON.stringify(cfg)); }catch(e){} }
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
@@ -481,7 +481,7 @@ function renderPresets(){
     b.setAttribute("aria-pressed", "false");
     b.addEventListener("click", function(){
       cfg = Object.assign({}, p.cfg,
-        {sound:cfg.sound, vibrate:cfg.vibrate, forceVideo:cfg.forceVideo});
+        {sound:cfg.sound, vibrate:cfg.vibrate, keepAwake:cfg.keepAwake});
       saveCfg(); syncSetup();
     });
     host.appendChild(b);
@@ -576,7 +576,7 @@ var WakeGuard = (function(){
        START tap, and iOS is far likelier to honour play() there than
        in the promise callback of a rejected wake-lock request. If the
        real lock does come through we shut the video back down below. */
-    var pending = (!healthy || cfg.forceVideo) ? startVideo() : null;
+    var pending = !healthy ? startVideo() : null;
     if(healthy) return;
 
     if(!hasAPI()) return settle(pending, "API 없음");
@@ -586,8 +586,7 @@ var WakeGuard = (function(){
         lock = w;
         /* iOS can revoke the lock on its own — take it straight back. */
         w.addEventListener("release", function(){ lock = null; if(on) acquire(); });
-        if(cfg.forceVideo){ set("both", ""); }
-        else { stopVideo(); set("lock", ""); }
+        stopVideo(); set("lock", "");
       }, function(err){
         lock = null;
         settle(pending, err && err.name ? err.name : "거부됨");
@@ -602,7 +601,7 @@ var WakeGuard = (function(){
       timer = setInterval(function(){          /* watchdog */
         if(!on || document.visibilityState !== "visible") return;
         if(!lock || lock.released) acquire();
-        if(mode === "video" || mode === "both"){
+        if(mode === "video"){
           var v = vid(); if(v && v.paused) play(v).then(null, function(){});
         }
       }, 12000);
@@ -691,7 +690,7 @@ function start(){
   segEls = Array.prototype.slice.call($("mapRun").children);
   enterPhase(true);
   resetBlackout();
-  WakeGuard.enable();
+  if(cfg.keepAwake) WakeGuard.enable();
   requestAnimationFrame(loop);
 }
 
@@ -814,7 +813,6 @@ $("muteBtn").addEventListener("click", function(){
 
 var WAKE_TEXT = {
   lock:  ["ok",   "🔒 화면 유지 중"],
-  both:  ["ok",   "🔒 화면 유지 중 · 영상 보강"],
   video: ["warn", "▶︎ 영상 방식으로 유지"],
   fail:  ["bad",  "⚠️ 화면 유지 실패"],
   idle:  ["",     ""]
@@ -853,7 +851,8 @@ function syncToggles(){
   $("swVib").disabled = !HAS_VIBE;
   $("testVib").disabled = !HAS_VIBE;
   $("vibHint").className = "rowhint" + (HAS_VIBE ? "" : " warn");
-  $("swWakeVideo").setAttribute("aria-pressed", cfg.forceVideo ? "true" : "false");
+  $("swKeepAwake").setAttribute("aria-pressed", cfg.keepAwake ? "true" : "false");
+  $("testWake").disabled = !cfg.keepAwake;
 
   $("vibHint").textContent = HAS_VIBE
     ? "운동 시작 = 짧게 두 번 + 길게 한 번"
@@ -870,13 +869,14 @@ $("swVib").addEventListener("click", function(){
   if(cfg.vibrate) buzz(60);
   syncToggles();
 });
-$("swWakeVideo").addEventListener("click", function(){
-  cfg.forceVideo = !cfg.forceVideo; saveCfg();
-  WakeGuard.refresh();
+$("swKeepAwake").addEventListener("click", function(){
+  cfg.keepAwake = !cfg.keepAwake; saveCfg();
+  if(cfg.keepAwake){ if(running) WakeGuard.enable(); }
+  else { WakeGuard.disable(); }
   $("wakeHint").className = "rowhint";
-  $("wakeHint").textContent = cfg.forceVideo
-    ? "Wake Lock이 되더라도 영상 방식을 함께 돌립니다"
-    : "자동 — Wake Lock 우선, 막히면 영상 방식";
+  $("wakeHint").textContent = cfg.keepAwake
+    ? "실행 중 자동 잠금을 막습니다 · 진단을 눌러 확인하세요"
+    : "끔 — 운동 중에도 평소처럼 화면이 잠깁니다";
   syncToggles();
 });
 
