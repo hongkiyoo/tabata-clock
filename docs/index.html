@@ -74,10 +74,6 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--rest);outl
   font-size:clamp(2rem,9vw,2.7rem);letter-spacing:.16em;margin:0;line-height:1;
 }
 .wordmark span{color:var(--rest)}
-.protocol{
-  margin:0;font-family:var(--mono);font-size:.74rem;letter-spacing:.05em;
-  color:var(--ink-3);line-height:1.6;max-width:46ch;
-}
 
 /* Preset chips */
 .presets{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
@@ -240,7 +236,6 @@ body.paused .glow{opacity:.04}
 <main class="setup" id="setup">
   <header class="masthead">
     <h1 class="wordmark">TABATA<span>.</span></h1>
-    <p class="protocol">20초 전력 / 10초 휴식 × 8라운드 = 4분.<br>다바타 이즈미, 1996 — 최대산소섭취량 170% 강도 기준.</p>
   </header>
 
   <div class="presets" id="presets"></div>
@@ -254,6 +249,8 @@ body.paused .glow{opacity:.04}
   </section>
 
   <section class="fields" id="fields"></section>
+
+  <button class="start" id="startBtn">START</button>
 
   <section class="mapblock">
     <span class="eyebrow">알림</span>
@@ -290,8 +287,6 @@ body.paused .glow{opacity:.04}
       </div>
     </div>
   </section>
-
-  <button class="start" id="startBtn">START</button>
 
   <p class="footnote">
     <span><b>소리</b> — START를 눌러야 오디오가 켜집니다(브라우저 정책). 3·2·1 카운트다운과 구간 전환음이 울려요.</span>
@@ -366,8 +361,8 @@ var FIELDS = [
 
 var PRESETS = [
   {name:"타바타 정석",  cfg:{prepare:10, work:20, rest:10, rounds:8, sets:1, setRest:60}},
-  {name:"타바타 ×4",    cfg:{prepare:10, work:20, rest:10, rounds:8, sets:4, setRest:60}},
-  {name:"40/20 서킷",   cfg:{prepare:15, work:40, rest:20, rounds:6, sets:3, setRest:60}},
+  {name:"타바타 ×4",    cfg:{prepare:15, work:20, rest:10, rounds:4, sets:2, setRest:60}},
+  {name:"40/20 서킷",   cfg:{prepare:15, work:40, rest:20, rounds:3, sets:1, setRest:60}},
   {name:"EMOM 10",     cfg:{prepare:10, work:60, rest:0,  rounds:10, sets:1, setRest:0}},
   {name:"30/30 입문",   cfg:{prepare:15, work:30, rest:30, rounds:8, sets:2, setRest:90}}
 ];
