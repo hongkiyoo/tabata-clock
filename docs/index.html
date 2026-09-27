@@ -340,10 +340,39 @@ body.paused .glow{opacity:.04}
 "use strict";
 
 /* Service worker: makes the home-screen app open instantly and work
-   with no signal — a gym basement is a realistic place to need this. */
+   with no signal — a gym basement is a realistic place to need this.
+
+   Updating needs care on iOS. A home-screen app resumed from the app
+   switcher never navigates, so nothing checks for a new worker; and even
+   once one activates, clients.claim() hands over control without
+   redrawing the page. So: check on every foreground, and reload once the
+   new worker takes over — but never mid-session, which is what the
+   body.running gate is for. */
 if("serviceWorker" in navigator){
+  var swPending = false, swReloading = false;
+  var swHadController = !!navigator.serviceWorker.controller;
+
+  function swMaybeReload(){
+    if(swReloading || !swPending) return;
+    if(document.body.classList.contains("running")) return;  /* not mid-workout */
+    swReloading = true;
+    location.reload();
+  }
+
+  navigator.serviceWorker.addEventListener("controllerchange", function(){
+    if(!swHadController){ swHadController = true; return; }  /* first install */
+    swPending = true;
+    swMaybeReload();
+  });
+
   window.addEventListener("load", function(){
-    navigator.serviceWorker.register("sw.js").then(null, function(){});
+    navigator.serviceWorker.register("sw.js", {updateViaCache:"none"}).then(function(reg){
+      reg.update();
+      document.addEventListener("visibilitychange", function(){
+        if(document.visibilityState === "visible"){ reg.update(); swMaybeReload(); }
+      });
+      setInterval(swMaybeReload, 5000);
+    }, function(){});
   });
 }
 

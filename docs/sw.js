@@ -1,4 +1,4 @@
-const CACHE = "tabata-ace250020e";
+const CACHE = "tabata-5471aa0a3e";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest",
                 "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 
